@@ -1,0 +1,131 @@
+\documentclass[red]{beamer}
+\usetheme{Warsaw}
+
+% Specify character encoding
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% Add support for images
+\usepackage{graphicx}
+
+% Polish characters
+\usepackage{fontspec}
+\usepackage[polish]{babel}
+
+\title{GHRS: Graph-based Hybrid Recommendation System with Application to Movie Recommendation}
+\author[ K. Kostka, R Jarzyński, M. Jeżewski, M. Gagoś ]{
+    Kamil Kostka \and
+    Radosław Jarzyński \and
+    Maciej Jeżewski \and
+    Michał Gagoś
+}
+\date{Lublin, 7 listopada 2026}
+
+\begin{document}
+
+    % Display authors
+    \begin{frame}
+    \titlepage
+    \end{frame}
+
+    \section{Artykuł}
+    \subsection{Dane artykułu}
+    \begin{frame}{Artykuł bazowy}
+        \begin{itemize}
+            \item \textbf{Tytuł:} GHRS: Graph-based Hybrid Recommendation System with Application to Movie Recommendation
+            \item \textbf{Autorzy:} Zahra Zamanzadeh Darban (Scopus h-index: 4), Mohammad Hadi Valipour (Scopus h-index: 4)
+            \item \textbf{Czasopismo:} Expert Systems with Applications
+            \item \textbf{Wydawca:} Elsevier
+            \item \textbf{IF:} 9.4, \textbf{punkty MEiN:} 200
+            \item \textbf{Źródło:} Preprint w repozytorium arXiv (\url{https://arxiv.org/abs/2111.11293})
+        \end{itemize}
+    \end{frame}
+
+    \subsection{Cel}
+    \begin{frame}{Cel badań i słowa kluczowe}
+        \small
+        \begin{itemize}
+            \item \textbf{Główny problem:} „zimny start” (cold start) -- niezdolność klasycznych systemów do precyzyjnego polecania filmów nowym użytkownikom bez historii ocen
+            \item \textbf{Cel artykułu:} hybrydowy system rekomendacyjny (GHRS) łączący grafowe miary podobieństwa użytkowników z ich profilem demograficznym, aby zniwelować skutki braku początkowych danych
+            \item \textbf{Kluczowa teza:} przepuszczenie surowych danych (demografii i statystyk grafowych) przez autoenkoder wyodrębnia najważniejsze, ukryte cechy; system filtruje szum i dokładniej dzieli użytkowników na grupy o zbieżnym guście
+        \end{itemize}
+        \begin{block}{Słowa kluczowe}
+        systemy rekomendacyjne, uczenie głębokie, modelowanie oparte na grafach, autoenkoder, problem zimnego startu
+        \end{block}
+    \end{frame}
+
+    \section{Badania}
+    \subsection{Materiał}
+    \begin{frame}{Materiał badawczy}
+        Dwa rzeczywiste zbiory z platformy MovieLens, wybrane ze względu na dane demograficzne (wiek, płeć, zawód, kod pocztowy).
+        \medskip
+        \begin{center}
+            \begin{tabular}{lrrr}
+                \textbf{Zbiór} & \textbf{Oceny (1--5)} & \textbf{Użytkownicy} & \textbf{Filmy}\\ \hline
+                MovieLens 100K & 100\,000 & 943 & 1\,682\\
+                MovieLens 1M & 1\,000\,209 & 6\,040 & ok.\ 3\,900
+            \end{tabular}
+        \end{center}
+    \end{frame}
+
+    \subsection{Metody}
+    \begin{frame}{Metody badawcze i implementacja}
+        \small
+        \begin{enumerate}
+            \item \textbf{Graf podobieństw:} węzły to użytkownicy, krawędzie łączą użytkowników o podobnym odsetku wspólnych ocen; próg $\alpha = 0{,}005$--$0{,}03$
+            \item \textbf{Cechy grafu:} PageRank, Closeness Centrality, Betweenness
+            \item \textbf{Fuzja cech:} konkatenacja z danymi demograficznymi (one-hot encoding)
+            \item \textbf{Redukcja wymiarów:} 5-warstwowy autoenkoder, ReLU, optymalizator Adam
+            \item \textbf{Klastrowanie:} K-Means, $K$ metodą łokcia ($K=8$ dla 100K, $K=9$ dla 1M)
+            \item \textbf{Estymacja ocen:} średnia preferencji członków klastra
+        \end{enumerate}
+    \end{frame}
+
+    \section{Wyniki i nowość}
+    \subsection{Wyniki}
+    \begin{frame}{Wyniki badań}
+        \small
+        \begin{itemize}
+            \item \textbf{Skuteczność główna:} na zbiorze 1M GHRS osiągnął RMSE $=0{,}833$ (precyzja $0{,}792$, czułość $0{,}838$); na zbiorze 100K RMSE $=0{,}887$
+            \item \textbf{Porównanie z konkurencją:} na 1M GHRS ma najniższy RMSE w zestawieniu, m.in. wobec SVD++ ($0{,}856$), Autoencoder COFILS ($0{,}838$) i RBM-CF ($0{,}872$); na 100K wynik równy AutoRec
+            \item \textbf{Zimny start:} gdy ukryto oceny do 20\% użytkowników, błąd rósł w kontrolowany sposób (1M: z ok.\ $0{,}83$ do ok.\ $0{,}96$) -- model radzi sobie z rekomendacjami na podstawie samej demografii
+        \end{itemize}
+    \end{frame}
+
+    \subsection{Nowość}
+    \begin{frame}{Elementy nowości}
+        \footnotesize
+        \begin{itemize}
+            \item \textbf{Fuzja relacji grafowych z demografią:} topologia grafu (jak użytkownicy łączą się przez podobne oceny) i profile demograficzne w jednej, wspólnej macierzy
+            \item \textbf{Inna rola autoenkodera:} „kompresor” i filtr -- wyciąga z połączonej macierzy najważniejsze wzorce (cechy o niskiej korelacji), odrzucając szum
+            \item \textbf{Klastrowanie na „czystych” danych:} K-Means działa na skompresowanych cechach z autoenkodera, nie na danych wejściowych; klastry są dokładniejsze, a generowanie rekomendacji szybsze
+        \end{itemize}
+        \begin{alertblock}{Ograniczenie modelu}
+            Zależność od danych pobocznych (demografii) -- brak zastosowania na platformach zbierających tylko login (bez płci i wieku).
+        \end{alertblock}
+    \end{frame}
+
+    \section{Wkład}
+    \subsection{Odtwarzalność}
+    \begin{frame}{Odtwarzalność badań i dane źródłowe}
+        \begin{itemize}
+            \item \textbf{Odtwarzalność:} badania są w pełni odtwarzalne, eksperyment zachowuje pełną transparentność metodologiczną
+            \item \textbf{Dane:} zbiory MovieLens to standard w dziedzinie systemów rekomendacyjnych, darmowe i otwarte
+            \item \textbf{Kod źródłowy:} \url{https://github.com/hadoov/GHRS}
+        \end{itemize}
+    \end{frame}
+
+    \subsection{Wkład własny}
+    \begin{frame}{Wkład własny}
+        \footnotesize
+        \textbf{Tytuł:} „Ewaluacja miękkich metod klastrowania (GMM, FCM) w grafowo-hybrydowych systemach rekomendacyjnych zmagających się z problemem zimnego startu”
+        \begin{itemize}
+            \item \textbf{Miękkie klastrowanie:} GMM i Fuzzy C-Means zamiast K-Means -- prawdopodobieństwa przynależności do wielu klastrów, gładsza estymacja dla użytkowników o zróżnicowanych gustach
+            \item \textbf{Wzbogacenie metryki:} krawędzie grafu uzupełnione o kosinusowe podobieństwo gatunków (TF-IDF z metadanych filmów) obok progu $\alpha$
+            \item \textbf{Nowa architektura:} VAE zamiast autoenkodera (ciągła przestrzeń ukryta ułatwia zimny start) oraz optymalizator Nadam
+            \item \textbf{Wdrożenie:} Python (PyTorch, scikit-learn)
+            \item \textbf{Efekty:} mniejsza wariancja rekomendacji, lepsza odporność na wartości odstające
+        \end{itemize}
+    \end{frame}
+
+\end{document}
