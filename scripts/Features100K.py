@@ -1,9 +1,9 @@
-"""Refactored authors' Features100K.py (GHRS steps 1-3) for Python 3.14 / modern libs.
+"""Steps 1-3 of GHRS: the authors' Features100K.py updated for Python 3.14.
 
-Same behaviour as ``original/Features100K.py``: builds the user similarity graph from
-``ua.base`` for each alpha and pickles the 943 x 35 combined feature matrix.
+Behaves like ``original/Features100K.py``: for every alpha it builds the user
+similarity graph from ``ua.base`` and pickles the 943 x 35 feature matrix.
 
-Usage (from the repo root):
+Usage (from the repository root):
     python -m scripts.Features100K [--split ua.base] [--out outputs/data100k]
 """
 
@@ -27,7 +27,7 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     df = load_ratings(args.split)
     df_user = load_users()
-    counter = count_similar_pairs(df)  # independent of alpha -> computed once
+    counter = count_similar_pairs(df)  # does not depend on alpha, so it is computed once
 
     for alpha_coef in args.alphas:
         t0 = time.perf_counter()

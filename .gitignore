@@ -12,6 +12,23 @@ env/
 # Generated outputs (reproducible from code)
 outputs/
 
+# Experiment artefacts written outside outputs/ by mistake
+*.npy
+*.npz
+*.tmp
+*.log
+/*.csv
+/*.json
+/*.pkl
+
+# LaTeX build files
+*.aux
+*.out
+*.toc
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+
 # IDE / OS
 .vscode/
 .idea/

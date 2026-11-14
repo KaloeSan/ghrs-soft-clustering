@@ -11,3 +11,4 @@ scikit-learn==1.9.1
 networkx==3.7
 keras==3.15.1
 torch==2.15.0           # the PyPI wheel on Windows is CPU-only, which is enough here
+optuna==5.0.0           # scripts/optimize_phase1.py (hyperparameter search)
