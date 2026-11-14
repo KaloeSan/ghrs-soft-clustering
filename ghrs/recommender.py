@@ -172,14 +172,16 @@ class ClusterRatingModel:
         tier = np.full((K, self.n_items), 4, dtype=np.int8)
         mm = self.cfg.min_mass
         has = CNT >= mm
-        CI[has] = ((SUM + lam * P) / (CNT + lam))[has]
+        # `where` limits the division to the selected cells; the others would be 0/0
+        # and are filled by the lower levels anyway.
+        np.divide(SUM + lam * P, CNT + lam, out=CI, where=has)
         tier[has] = 0
 
         W = self._similarity_matrix(item_genres, u, i, r)
         if W is not None:
             S_sim, N_sim = SUM @ W.T, CNT @ W.T
             m = ~has & (N_sim >= mm)
-            CI[m] = ((S_sim + lam * P) / (N_sim + lam))[m]
+            np.divide(S_sim + lam * P, N_sim + lam, out=CI, where=m)
             tier[m] = 1
 
         m = np.isnan(CI)

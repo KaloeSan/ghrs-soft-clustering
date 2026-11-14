@@ -1,7 +1,10 @@
 """Step 5 of GHRS: K-Means clustering of the encoded users, plus tools for choosing K."""
 
+import warnings
+
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import silhouette_score
 
 from .autoencoder import active_dims
@@ -35,10 +38,23 @@ def scale_codes(F_e: np.ndarray, how: str = "minmax") -> np.ndarray:
     return out
 
 
+def _fit_kmeans(F_e: np.ndarray, k: int, seed: int, n_init: int) -> KMeans:
+    """Fit K-Means, ignoring the warning about fewer distinct points than clusters.
+
+    That warning appears when the autoencoder collapses (common in the hyperparameter
+    search with strong regularisation). The collapse is expected there, it is already
+    reported as `active_code_dims`, and K-Means still returns valid labels, so only
+    this one message is filtered. Other convergence warnings are still shown.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Number of distinct clusters", category=ConvergenceWarning)
+        return KMeans(n_clusters=k, n_init=n_init, random_state=seed).fit(F_e)
+
+
 def kmeans_clusters(F_e: np.ndarray, k: int, seed: int, n_init: int = N_INIT) -> np.ndarray:
     if k == 1:
         return np.zeros(len(F_e), dtype=int)
-    return KMeans(n_clusters=k, n_init=n_init, random_state=seed).fit_predict(F_e)
+    return _fit_kmeans(F_e, k, seed, n_init).labels_
 
 
 def elbow_and_silhouette(F_e: np.ndarray, k_range: range, seed: int) -> list[dict]:
@@ -50,7 +66,7 @@ def elbow_and_silhouette(F_e: np.ndarray, k_range: range, seed: int) -> list[dic
     """
     rows = []
     for k in k_range:
-        km = KMeans(n_clusters=k, n_init=N_INIT, random_state=seed).fit(F_e)
+        km = _fit_kmeans(F_e, k, seed, N_INIT)
         sil = silhouette_score(F_e, km.labels_) if 2 <= k < len(F_e) else np.nan
         rows.append({"k": k, "inertia": km.inertia_, "silhouette": sil})
     return rows
