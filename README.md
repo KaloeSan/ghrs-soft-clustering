@@ -1,10 +1,10 @@
 # GHRS reproduction on MovieLens 100K
 
 This repository reimplements and evaluates **GHRS**, the graph-based hybrid recommender
-system of Darban & Valipour (2022), on the MovieLens 100K dataset. It is the first phase
-of a Master's project. The goal of this phase is to reproduce the paper's results and
-build a clean baseline. Later phases will replace the hard K-Means step with soft
-clustering.
+system of Darban & Valipour (2022), on the MovieLens 100K dataset, as part of a Master's
+project. Phase 1 reproduces the paper and builds a clean baseline. Phase 2 extends the
+method with a variational autoencoder, a TF-IDF genre condition on the user graph and
+soft clustering (Gaussian mixtures and fuzzy c-means).
 
 The authors published only the feature extraction step
 ([hadoov/GHRS](https://github.com/hadoov/GHRS)). The remaining steps (autoencoder,
@@ -44,6 +44,32 @@ does not specify, a search over user partitions, and a set of simulated evaluati
 mistakes all fail to explain the gap. The details are in
 [docs/phase1_reproducibility_audit.md](docs/phase1_reproducibility_audit.md).
 
+### Phase 2 extensions
+
+Same folds and seeds, K = 8. p-values: corrected resampled t-test on the per-fold RMSE,
+Holm-adjusted. The full tables, controls, cold-start results and sweeps are produced
+by `scripts/run_phase2.py` in `outputs/phase2/report.md`.
+
+| Model | RMSE | vs baseline | vs GHRS with K = 1 |
+|---|---|---|---|
+| Phase 1 baseline (AE + K-Means) | 1.0761 | | |
+| VAE + K-Means | 1.0788 | +0.0028 | worse |
+| TF-IDF graph + AE + K-Means | 1.0777 | +0.0016 | worse |
+| AE + GMM | 1.0727 | -0.0034 (p = 0.15) | worse |
+| VAE + GMM | 1.0657 | -0.0103 (p = 0.02) | worse |
+| AE + FCM | 1.0263 | -0.0497 (p < 0.001) | no difference (p = 0.76) |
+| VAE + FCM + TF-IDF | 1.0255 | -0.0505 (p < 0.001) | no difference (p = 0.76) |
+| GHRS with K = 1 / item mean | 1.0246 | | |
+
+Soft clustering with fuzzy c-means lowers the RMSE by about 0.05 compared with the
+baseline, with similar gains for cold-start users. The controls show where the gain comes
+from. The same FCM partitions used as hard labels score like the baseline. RMSE falls
+steadily as the memberships get softer, and the best soft variants reach the level of
+GHRS with a single cluster (item means). So the gain comes from averaging over clusters
+rather than from a better user partition. The VAE and the TF-IDF graph condition do not
+change the RMSE on their own; the TF-IDF graph scores the same as a graph with the same
+number of randomly kept edges.
+
 ## Repository structure
 
 ```
@@ -56,6 +82,9 @@ ghrs/                  the method as a Python package
   metrics.py           RMSE, MAE, precision and recall
   experiment.py        shared pipeline, evaluation protocols and caching
   bounds.py            best RMSE reachable by any user partition
+  autoencoder_vae.py   Phase 2: variational autoencoder (step 4)
+  graph_tfidf.py       Phase 2: graph with a TF-IDF genre condition (step 1)
+  clustering_soft.py   Phase 2: GMM and fuzzy c-means memberships (step 5)
 scripts/               command-line entry points
   Features100K.py      the authors' feature script, updated for current libraries
   verify_features.py   compares our features with the authors' files
@@ -63,6 +92,7 @@ scripts/               command-line entry points
   leakage_simulator.py tests whether evaluation mistakes explain the paper's result
   optimize_phase1.py   hyperparameter search with Optuna
   partition_bound.py   partition search used as a reference bound
+  run_phase2.py        Phase 2 extensions compared with the baseline and controls
 original/              the authors' unmodified script and feature files
 datasets/ml-100k/      MovieLens 100K
 docs/                  paper, presentation and the reproducibility report
@@ -89,8 +119,11 @@ Run all commands from the repository root.
 # check that the feature extraction matches the authors' files
 python -m scripts.verify_features --fast
 
-# main experiment: 5-fold cross-validation, 5 seeds
-python -m scripts.run_phase1 --seeds 42 1 2 3 4
+# main experiment: 5-fold cross-validation, 5 seeds (the seeds behind the 1.076 baseline)
+python -m scripts.run_phase1 --seeds 42 0 1 2 3
+
+# Phase 2: extensions, controls, cold start and sweeps
+python -m scripts.run_phase2 --k-sweep 2 4 8 16 32 --cos-sweep 0.9 0.95
 
 # choose K with the elbow and silhouette methods
 python -m scripts.run_phase1 --select-k

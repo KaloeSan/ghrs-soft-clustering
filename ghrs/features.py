@@ -116,10 +116,9 @@ def co_rating_matrices(df_ratings: pd.DataFrame, n_users: int, tolerance: int = 
     return S.tocsr(), C.tocsr()
 
 
-def build_similarity_graph_fast(S: sp.csr_matrix, C: sp.csr_matrix, alpha_coef: float,
-                                mode: str = "absolute", n_items: int = N_ITEMS_100K,
-                                min_corated: int = 5) -> nx.Graph:
-    """Build the similarity graph from the matrices of ``co_rating_matrices``.
+def similar_pairs(S: sp.csr_matrix, C: sp.csr_matrix, alpha_coef: float, mode: str = "absolute",
+                  n_items: int = N_ITEMS_100K, min_corated: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    """User pairs (a < b) that pass the co-rating rule, from the matrices of ``co_rating_matrices``.
 
     ``mode='absolute'`` is the authors' rule (``S >= alpha * n_items``). ``'corated'``
     is another possible reading of "more than alpha percent of items with similar
@@ -133,11 +132,23 @@ def build_similarity_graph_fast(S: sp.csr_matrix, C: sp.csr_matrix, alpha_coef: 
         keep = (c >= min_corated) & (S_up.data / np.maximum(c, 1) >= alpha_coef)
     else:
         raise ValueError(f"unknown mode {mode!r}")
-    rows, cols = S_up.row[keep].tolist(), S_up.col[keep].tolist()
+    return S_up.row[keep], S_up.col[keep]
+
+
+def graph_from_pairs(rows: np.ndarray, cols: np.ndarray) -> nx.Graph:
+    """Unweighted user graph with a self-loop on every connected user, as in the original model."""
+    rows, cols = rows.tolist(), cols.tolist()
     G = nx.Graph()
     G.add_edges_from(zip(rows, cols), weight=1)
     G.add_edges_from(((n, n) for n in set(rows) | set(cols)), weight=1)
     return G
+
+
+def build_similarity_graph_fast(S: sp.csr_matrix, C: sp.csr_matrix, alpha_coef: float,
+                                mode: str = "absolute", n_items: int = N_ITEMS_100K,
+                                min_corated: int = 5) -> nx.Graph:
+    """Same graph rule as ``build_similarity_graph``, computed from the sparse pair counts."""
+    return graph_from_pairs(*similar_pairs(S, C, alpha_coef, mode, n_items, min_corated))
 
 
 def build_feature_matrix_fast(df_ratings: pd.DataFrame, df_user_raw: pd.DataFrame,

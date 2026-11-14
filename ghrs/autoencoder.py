@@ -78,7 +78,7 @@ def active_dims(F: np.ndarray, rel_tol: float = 1e-3, abs_tol: float = 1e-6) -> 
     return spread > max(rel_tol * float(spread.max(initial=0.0)), abs_tol)
 
 
-class _PureValMSE(keras.callbacks.Callback):
+class PureValMSE(keras.callbacks.Callback):
     """Records the validation reconstruction MSE without the L1/L2 penalty."""
 
     def __init__(self, X_val: np.ndarray):
@@ -102,7 +102,7 @@ def encode_users(X: np.ndarray, cfg: AEConfig, seed: int,
     X = np.asarray(X, dtype="float32")
     X_tr, X_val = train_test_split(X, test_size=cfg.val_fraction, random_state=seed)
     autoencoder, encoder = build_autoencoder(X.shape[1], cfg)
-    cb = _PureValMSE(X_val)
+    cb = PureValMSE(X_val)
     hist = autoencoder.fit(X_tr, X_tr, validation_data=(X_val, X_val), epochs=cfg.epochs,
                            batch_size=cfg.batch_size, shuffle=True, verbose=0, callbacks=[cb])
     F_e = encoder.predict(X, batch_size=1024, verbose=0)

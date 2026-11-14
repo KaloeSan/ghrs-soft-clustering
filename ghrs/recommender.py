@@ -33,10 +33,14 @@ that we only use in the hyperparameter search:
 - ``fallback``: the cluster mean (paper) or the prior P_i.
 - ``clip``: clip the predictions to [1, 5].
 
-UC can contain hard K-Means labels or soft memberships. A cell uses level 1 only if
-its weighted rating count reaches ``min_mass`` (0.5 by default). For hard labels this
-is exactly the paper's rule; for soft memberships it keeps a tiny membership from
-counting as "the cluster has rated this item".
+UC can contain hard K-Means labels or soft memberships (Phase 2: GMM, fuzzy c-means);
+each user's row must sum to 1. With soft memberships SUM and CNT are membership-
+weighted, so CI[c, i] is a weighted mean of the ratings of item i, and the prediction
+sum_c UC[u, c] * CI[c, i] is the expected cluster-item mean under the user's membership
+distribution. For one-hot rows both reduce to the paper's model. A cell uses level 1
+only if its weighted rating count reaches ``min_mass`` (0.5 by default): for hard labels
+this is exactly the paper's rule, and for soft memberships it keeps a tiny membership
+from counting as "the cluster has rated this item".
 """
 
 from dataclasses import dataclass
@@ -156,6 +160,9 @@ class ClusterRatingModel:
         self.UC = np.asarray(UC, float)
         if self.UC.ndim != 2 or self.UC.shape[0] <= u.max():
             raise ValueError(f"UC must be (max UID + 1) x K, got {self.UC.shape}")
+        mass = self.UC.sum(axis=1)
+        if (self.UC < 0).any() or not np.all(np.isclose(mass, 1.0) | (mass == 0)):
+            raise ValueError("every used row of UC must be non-negative and sum to 1")
         self.n_users = self.UC.shape[0]
         self.n_items = int(max(n_items or 0, item_genres.index.max(), i.max())) + 1
         self._fit_baseline(u, i, r)

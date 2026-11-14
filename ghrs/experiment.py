@@ -6,6 +6,12 @@ ratings are used at each step. Its default is a correct 5-fold cross-validation;
 other settings introduce specific evaluation mistakes on purpose, so their effect can
 be measured.
 
+The Phase 2 extensions are switched on through the configuration: a TF-IDF genre
+condition on the graph (``GraphConfig.cos_threshold``), a VAE instead of the
+autoencoder (``ClusterConfig.space='vae'``) and soft clustering
+(``ClusterConfig.method='gmm'`` or ``'fcm'``). With the defaults the pipeline is
+exactly the Phase 1 model.
+
 Feature matrices and autoencoder codes are cached as .npy files in ``outputs/cache``,
 so repeated runs only recompute what has changed.
 """
@@ -19,9 +25,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from .autoencoder import AEConfig, encode_users
+from .autoencoder_vae import VAEConfig, encode_users_vae
 from .clustering import N_INIT, kmeans_clusters, scale_codes
+from .clustering_soft import SOFT_METHODS, membership_stats, soft_memberships
 from .data import load_item_genres, load_ratings, load_users
 from .features import build_feature_matrix_fast, co_rating_matrices
+from .graph_tfidf import build_feature_matrix_hybrid
 from .metrics import all_metrics
 from .recommender import ClusterRatingModel, RecConfig, membership_matrix
 
@@ -34,14 +43,37 @@ class GraphConfig:
     alpha: float = 0.01          # best value for ML-100K in the paper
     tolerance: int = 0           # 0: identical ratings (authors' code), 1: ratings differ by at most 1
     mode: str = "absolute"       # 'absolute' (authors' code) or 'corated'
+    cos_threshold: float | None = None   # Phase 2: minimum TF-IDF genre cosine per edge, None = off
+    edge_seed: int | None = None         # Phase 2 control: random edges instead of the cosine rule
+
+    def __post_init__(self):
+        if self.edge_seed is not None and self.cos_threshold is None:
+            raise ValueError("edge_seed needs cos_threshold, which sets how many edges are kept")
+
+
+# Graph fields added in Phase 2. Left out of the cache key while unset, so Phase 1
+# feature files keep their original names.
+_PHASE2_GRAPH_FIELDS = ("cos_threshold", "edge_seed")
 
 
 @dataclass(frozen=True)
 class ClusterConfig:
     k: int = 8                   # elbow method, Table 2 of the paper
-    space: str = "ae"            # 'ae' (paper) or 'raw' (K-Means on the 35 features)
+    space: str = "ae"            # 'ae' (paper), 'vae' (Phase 2) or 'raw' (the 35 features)
     scale: str = "minmax"        # 'minmax' (paper), 'none' or 'standard'
     n_init: int = N_INIT
+    method: str = "kmeans"       # 'kmeans' (paper), 'gmm' or 'fcm' (Phase 2)
+    fuzziness: float = 2.0       # FCM fuzzifier m
+    gmm_covariance: str = "full"
+    temperature: float = 1.0     # GMM posterior temperature, 1 = plain posterior
+    reg_covar: float = 1e-3      # GMM covariance floor, see ghrs.clustering_soft
+    argmax: bool = False         # Phase 2 control: replace soft weights by their largest entry
+
+    def __post_init__(self):
+        if self.space not in ("ae", "vae", "raw") or self.method not in ("kmeans", *SOFT_METHODS):
+            raise ValueError(f"invalid ClusterConfig {self}")
+        if self.fuzziness <= 1 or self.temperature <= 0 or self.reg_covar < 0:
+            raise ValueError("fuzziness must be > 1, temperature > 0 and reg_covar >= 0")
 
 
 @dataclass(frozen=True)
@@ -76,6 +108,7 @@ class Protocol:
 class RunConfig:
     graph: GraphConfig = field(default_factory=GraphConfig)
     ae: AEConfig = field(default_factory=AEConfig)
+    vae: VAEConfig = field(default_factory=VAEConfig)
     cluster: ClusterConfig = field(default_factory=ClusterConfig)
     rec: RecConfig = field(default_factory=RecConfig)
     protocol: Protocol = field(default_factory=Protocol)
@@ -139,29 +172,36 @@ class Experiment:
 
     def features(self, fold: str, g: GraphConfig, p: Protocol) -> np.ndarray:
         if p.graph_source == "authors_ua":
-            if g.tolerance or g.mode != "absolute" or p.cold_frac:
+            if g.tolerance or g.mode != "absolute" or g.cos_threshold is not None or p.cold_frac:
                 raise ValueError("authors_ua features exist only for the original graph rule")
             path = self.authors_dir / f"x_train_alpha({g.alpha}).pkl"
             return pd.read_pickle(path).to_numpy(float)
-        key = _key("feat-v1", p.fixed_base or fold, asdict(g), p.graph_source, p.cold_frac, p.cold_seed,
+        g_key = {k: v for k, v in asdict(g).items() if not (k in _PHASE2_GRAPH_FIELDS and v is None)}
+        key = _key("feat-v1", p.fixed_base or fold, g_key, p.graph_source, p.cold_frac, p.cold_seed,
                    *([] if p.graph_source == "train" else [fold]))
         path = self.cache / "features" / f"{key}.npy"
         if path.exists():
             return np.load(path)
         graph_ratings, _, _ = self.rating_sources(fold, p)
         mats = co_rating_matrices(graph_ratings, int(self.uids.max()), g.tolerance)
-        F = build_feature_matrix_fast(graph_ratings, self.users, g.alpha, g.tolerance, g.mode, mats)
+        if g.cos_threshold is None:
+            F = build_feature_matrix_fast(graph_ratings, self.users, g.alpha, g.tolerance, g.mode, mats)
+        else:
+            F = build_feature_matrix_hybrid(graph_ratings, self.users, self.genres, g.alpha, g.cos_threshold,
+                                            g.tolerance, g.mode, mats, edge_seed=g.edge_seed)
         F = F.to_numpy(float)
         _atomic_save(path, F)
         return F
 
-    def codes(self, F_t: np.ndarray, ae: AEConfig, seed: int) -> tuple[np.ndarray, dict]:
-        key = _key("codes-v1", hashlib.sha1(np.ascontiguousarray(F_t)).hexdigest(), asdict(ae), seed)
+    def codes(self, F_t: np.ndarray, enc: AEConfig | VAEConfig, seed: int) -> tuple[np.ndarray, dict]:
+        """User codes from the autoencoder or, for a ``VAEConfig``, the VAE posterior means."""
+        prefix, encode = ("vae-codes-v1", encode_users_vae) if isinstance(enc, VAEConfig) else ("codes-v1", encode_users)
+        key = _key(prefix, hashlib.sha1(np.ascontiguousarray(F_t)).hexdigest(), asdict(enc), seed)
         path = self.cache / "codes" / f"{key}.npy"
         meta = path.with_suffix(".json")
         if path.exists() and meta.exists():
             return np.load(path), json.loads(meta.read_text())
-        F_e, info = encode_users(F_t, ae, seed)
+        F_e, info = encode(F_t, enc, seed)
         _atomic_save(path, F_e)
         tmp = meta.with_name(f"{meta.stem}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps(info))
@@ -171,6 +211,19 @@ class Experiment:
     def labels(self, X: np.ndarray, c: ClusterConfig, seed: int) -> np.ndarray:
         return kmeans_clusters(scale_codes(X, c.scale), c.k, seed, c.n_init)
 
+    def memberships(self, X: np.ndarray, c: ClusterConfig, seed: int) -> np.ndarray:
+        """User x cluster matrix UC indexed by UID: one-hot for K-Means, soft weights for GMM/FCM."""
+        if c.method == "kmeans":
+            return membership_matrix(self.uids, self.labels(X, c, seed), c.k)
+        W = soft_memberships(scale_codes(X, c.scale), c.method, c.k, seed, fuzziness=c.fuzziness,
+                             covariance_type=c.gmm_covariance, temperature=c.temperature, n_init=c.n_init,
+                             reg_covar=c.reg_covar)
+        if c.argmax:
+            return membership_matrix(self.uids, W.argmax(axis=1), c.k)
+        UC = np.zeros((int(self.uids.max()) + 1, c.k))
+        UC[self.uids] = W
+        return UC
+
     def run_fold(self, fold: str, cfg: RunConfig, seed: int = 42, labels: np.ndarray | None = None) -> dict:
         p = cfg.protocol
         _, ci_ratings, ev = self.rating_sources(fold, p)
@@ -179,14 +232,18 @@ class Experiment:
             F_t = self.features(fold, cfg.graph, p)
             if cfg.cluster.space == "ae":
                 X, info = self.codes(F_t, cfg.ae, seed)
+            elif cfg.cluster.space == "vae":
+                X, info = self.codes(F_t, cfg.vae, seed)
             else:
                 X = F_t
-            labels = self.labels(X, cfg.cluster, seed)
-        UC = membership_matrix(self.uids, labels, cfg.cluster.k)
+            UC = self.memberships(X, cfg.cluster, seed)
+        else:
+            UC = membership_matrix(self.uids, labels, cfg.cluster.k)
         model = ClusterRatingModel(cfg.rec).fit(ci_ratings, UC, self.genres)
         pred, tiers = model.predict(ev)
         out = {"fold": fold, "seed": seed, "n_eval": len(ev),
                **all_metrics(ev["UID"].to_numpy(), ev["rate"].to_numpy(), pred),
+               **membership_stats(UC[self.uids]),
                **{f"ae_{k}": v for k, v in info.items()},
                **{f"tier_{k}": int(v) for k, v in tiers.items()}}
         return out
