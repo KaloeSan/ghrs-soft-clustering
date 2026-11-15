@@ -4,7 +4,7 @@ Behaves like ``original/Features100K.py``: for every alpha it builds the user
 similarity graph from ``ua.base`` and pickles the 943 x 35 feature matrix.
 
 Usage (from the repository root):
-    python -m scripts.Features100K [--split ua.base] [--out outputs/data100k]
+    python -m scripts.build_features_100k [--split ua.base] [--out outputs/data100k]
 """
 
 import argparse
@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ghrs.data import load_ratings, load_users
 from ghrs.features import build_feature_matrix, count_similar_pairs
+from ghrs.paths import OUTPUTS
 
 ALPHA_COEFS = [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045]
 
@@ -20,7 +21,7 @@ ALPHA_COEFS = [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045]
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--split", default="ua.base", help="training ratings file (default: ua.base, as authors)")
-    ap.add_argument("--out", type=Path, default=Path("outputs/data100k"))
+    ap.add_argument("--out", type=Path, default=OUTPUTS / "data100k")
     ap.add_argument("--alphas", type=float, nargs="+", default=ALPHA_COEFS)
     args = ap.parse_args()
 

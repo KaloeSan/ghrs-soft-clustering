@@ -75,11 +75,6 @@ class RecConfig:
         if self.shrink < 0 or self.min_mass <= 0:
             raise ValueError("shrink must be >= 0 and min_mass > 0")
 
-    @property
-    def is_paper(self) -> bool:
-        # The paper does not define "similar items", so any choice of it still counts.
-        return self == RecConfig(similar=self.similar)
-
 
 def membership_matrix(uids: np.ndarray, labels: np.ndarray, k: int | None = None) -> np.ndarray:
     """Turn hard cluster labels into a one-hot matrix UC with one row per UID."""
@@ -92,8 +87,8 @@ def membership_matrix(uids: np.ndarray, labels: np.ndarray, k: int | None = None
 class ClusterRatingModel:
     """Rating predictor based on cluster-item means (Algorithm 1 of the paper)."""
 
-    def __init__(self, cfg: RecConfig = RecConfig()):
-        self.cfg = cfg
+    def __init__(self, cfg: RecConfig | None = None):
+        self.cfg = cfg or RecConfig()
 
     def _fit_baseline(self, u: np.ndarray, i: np.ndarray, r: np.ndarray) -> None:
         cfg, nU, nI = self.cfg, self.n_users, self.n_items

@@ -16,8 +16,6 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 from .data import N_ITEMS_100K
 
-GRAPH_FEATURES = ["PR", "CD", "CC", "CB", "LC", "AND"]
-
 
 def convert_categorical(df_X: pd.DataFrame, _X: str) -> pd.DataFrame:
     """Replace column ``_X`` with one-hot columns ``_X1 .. _Xn`` placed right after UID."""
@@ -139,7 +137,7 @@ def graph_from_pairs(rows: np.ndarray, cols: np.ndarray) -> nx.Graph:
     """Unweighted user graph with a self-loop on every connected user, as in the original model."""
     rows, cols = rows.tolist(), cols.tolist()
     G = nx.Graph()
-    G.add_edges_from(zip(rows, cols), weight=1)
+    G.add_edges_from(zip(rows, cols, strict=True), weight=1)
     G.add_edges_from(((n, n) for n in set(rows) | set(cols)), weight=1)
     return G
 

@@ -24,6 +24,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
 from .autoencoder import AEConfig, encode_users
 from .autoencoder_vae import VAEConfig, encode_users_vae
 from .clustering import N_INIT, kmeans_clusters, scale_codes
@@ -32,6 +33,7 @@ from .data import load_item_genres, load_ratings, load_users
 from .features import build_feature_matrix_fast, co_rating_matrices
 from .graph_tfidf import build_feature_matrix_hybrid
 from .metrics import all_metrics
+from .paths import AUTHORS_FEATURES, OUTPUTS
 from .recommender import ClusterRatingModel, RecConfig, membership_matrix
 
 PAPER_TARGETS = {"rmse": 0.887, "rmse_S2": 1.595e-4, "precision": 0.771, "recall": 0.799}
@@ -129,7 +131,7 @@ def _atomic_save(path: Path, arr: np.ndarray) -> None:
 
 
 class Experiment:
-    def __init__(self, cache_dir: Path = Path("outputs/cache"), authors_dir: Path = Path("original/data100k")):
+    def __init__(self, cache_dir: Path = OUTPUTS / "cache", authors_dir: Path = AUTHORS_FEATURES):
         self.cache = cache_dir
         (self.cache / "features").mkdir(parents=True, exist_ok=True)
         (self.cache / "codes").mkdir(parents=True, exist_ok=True)
@@ -195,7 +197,10 @@ class Experiment:
 
     def codes(self, F_t: np.ndarray, enc: AEConfig | VAEConfig, seed: int) -> tuple[np.ndarray, dict]:
         """User codes from the autoencoder or, for a ``VAEConfig``, the VAE posterior means."""
-        prefix, encode = ("vae-codes-v1", encode_users_vae) if isinstance(enc, VAEConfig) else ("codes-v1", encode_users)
+        if isinstance(enc, VAEConfig):
+            prefix, encode = "vae-codes-v1", encode_users_vae
+        else:
+            prefix, encode = "codes-v1", encode_users
         key = _key(prefix, hashlib.sha1(np.ascontiguousarray(F_t)).hexdigest(), asdict(enc), seed)
         path = self.cache / "codes" / f"{key}.npy"
         meta = path.with_suffix(".json")
@@ -241,12 +246,11 @@ class Experiment:
             UC = membership_matrix(self.uids, labels, cfg.cluster.k)
         model = ClusterRatingModel(cfg.rec).fit(ci_ratings, UC, self.genres)
         pred, tiers = model.predict(ev)
-        out = {"fold": fold, "seed": seed, "n_eval": len(ev),
-               **all_metrics(ev["UID"].to_numpy(), ev["rate"].to_numpy(), pred),
-               **membership_stats(UC[self.uids]),
-               **{f"ae_{k}": v for k, v in info.items()},
-               **{f"tier_{k}": int(v) for k, v in tiers.items()}}
-        return out
+        return {"fold": fold, "seed": seed, "n_eval": len(ev),
+                **all_metrics(ev["UID"].to_numpy(), ev["rate"].to_numpy(), pred),
+                **membership_stats(UC[self.uids]),
+                **{f"ae_{k}": v for k, v in info.items()},
+                **{f"tier_{k}": int(v) for k, v in tiers.items()}}
 
     def run(self, cfg: RunConfig, folds=FOLDS_5CV, seeds=(42,)) -> pd.DataFrame:
         return pd.DataFrame([self.run_fold(f, cfg, s) for s in seeds for f in folds])

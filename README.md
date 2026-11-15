@@ -10,7 +10,7 @@ The authors published only the feature extraction step
 ([hadoov/GHRS](https://github.com/hadoov/GHRS)). The remaining steps (autoencoder,
 clustering and rating prediction) are rebuilt here from the paper.
 
-![GHRS framework](Figs/ghrs-structure.png)
+![GHRS framework](figs/ghrs-structure.png)
 
 ## Method
 
@@ -32,12 +32,12 @@ GHRS predicts ratings in seven steps:
 5-fold cross-validation on the standard splits `u1`-`u5`, alpha = 0.01, K = 8,
 averaged over 5 random seeds:
 
-| Model | RMSE | Precision | Recall |
-|---|---|---|---|
-| GHRS, as reported in the paper | 0.887 | 0.771 | 0.799 |
-| GHRS, this implementation | 1.076 ± 0.001 | 0.664 | 0.724 |
-| Item mean (reference) | 1.025 | | |
-| Global mean (reference) | 1.126 | | |
+| Model                          |          RMSE | Precision | Recall |
+| ------------------------------ | ------------: | --------: | -----: |
+| GHRS, as reported in the paper |         0.887 |     0.771 |  0.799 |
+| GHRS, this implementation      | 1.076 ± 0.001 |     0.664 |  0.724 |
+| Item mean (reference)          |         1.025 |           |        |
+| Global mean (reference)        |         1.126 |           |        |
 
 The reported RMSE could not be reproduced. A tuning search over the settings the paper
 does not specify, a search over user partitions, and a set of simulated evaluation
@@ -48,18 +48,19 @@ mistakes all fail to explain the gap. The details are in
 
 Same folds and seeds, K = 8. p-values: corrected resampled t-test on the per-fold RMSE,
 Holm-adjusted. The full tables, controls, cold-start results and sweeps are produced
-by `scripts/run_phase2.py` in `outputs/phase2/report.md`.
+by `scripts/run_phase2.py` in [docs/phase2_results_report.md](docs/phase2_results_report.md),
+and the figures for the paper in [`figs/`](figs/).
 
-| Model | RMSE | vs baseline | vs GHRS with K = 1 |
-|---|---|---|---|
-| Phase 1 baseline (AE + K-Means) | 1.0761 | | |
-| VAE + K-Means | 1.0788 | +0.0028 | worse |
-| TF-IDF graph + AE + K-Means | 1.0777 | +0.0016 | worse |
-| AE + GMM | 1.0727 | -0.0034 (p = 0.15) | worse |
-| VAE + GMM | 1.0657 | -0.0103 (p = 0.02) | worse |
-| AE + FCM | 1.0263 | -0.0497 (p < 0.001) | no difference (p = 0.76) |
-| VAE + FCM + TF-IDF | 1.0255 | -0.0505 (p < 0.001) | no difference (p = 0.76) |
-| GHRS with K = 1 / item mean | 1.0246 | | |
+| Model                           |   RMSE |         vs baseline | vs GHRS with K = 1       |
+| ------------------------------- | -----: | ------------------: | ------------------------ |
+| Phase 1 baseline (AE + K-Means) | 1.0761 |                     |                          |
+| VAE + K-Means                   | 1.0788 |             +0.0028 | worse                    |
+| TF-IDF graph + AE + K-Means     | 1.0777 |             +0.0016 | worse                    |
+| AE + GMM                        | 1.0727 |  -0.0034 (p = 0.15) | worse                    |
+| VAE + GMM                       | 1.0657 |  -0.0103 (p = 0.02) | worse                    |
+| AE + FCM                        | 1.0263 | -0.0497 (p < 0.001) | no difference (p = 0.76) |
+| VAE + FCM + TF-IDF              | 1.0255 | -0.0505 (p < 0.001) | no difference (p = 0.76) |
+| GHRS with K = 1 / item mean     | 1.0246 |                     |                          |
 
 Soft clustering with fuzzy c-means lowers the RMSE by about 0.05 compared with the
 baseline, with similar gains for cold-start users. The controls show where the gain comes
@@ -73,30 +74,34 @@ number of randomly kept edges.
 ## Repository structure
 
 ```
-ghrs/                  the method as a Python package
-  data.py              MovieLens 100K loaders
-  features.py          steps 1-3: similarity graph, centralities, side information
-  autoencoder.py       step 4: autoencoder
-  clustering.py        step 5: K-Means and choice of K
-  recommender.py       steps 6-7: cluster-item ratings and predictions
-  metrics.py           RMSE, MAE, precision and recall
-  experiment.py        shared pipeline, evaluation protocols and caching
-  bounds.py            best RMSE reachable by any user partition
-  autoencoder_vae.py   Phase 2: variational autoencoder (step 4)
-  graph_tfidf.py       Phase 2: graph with a TF-IDF genre condition (step 1)
-  clustering_soft.py   Phase 2: GMM and fuzzy c-means memberships (step 5)
-scripts/               command-line entry points
-  Features100K.py      the authors' feature script, updated for current libraries
-  verify_features.py   compares our features with the authors' files
-  run_phase1.py        main experiment (5-fold cross-validation)
-  leakage_simulator.py tests whether evaluation mistakes explain the paper's result
-  optimize_phase1.py   hyperparameter search with Optuna
-  partition_bound.py   partition search used as a reference bound
-  run_phase2.py        Phase 2 extensions compared with the baseline and controls
-original/              the authors' unmodified script and feature files
-datasets/ml-100k/      MovieLens 100K
-docs/                  paper, presentation and the reproducibility report
-outputs/               generated results (not tracked by git)
+ghrs/                     the method as a Python package
+  data.py                 MovieLens 100K loaders
+  features.py             steps 1-3: similarity graph, centralities, side information
+  autoencoder.py          step 4: autoencoder
+  clustering.py           step 5: K-Means and choice of K
+  recommender.py          steps 6-7: cluster-item ratings and predictions
+  metrics.py              RMSE, MAE, precision and recall
+  experiment.py           shared pipeline, evaluation protocols and caching
+  paths.py                repository locations used as defaults
+  tables.py               aligned Markdown tables for the reports
+  bounds.py               best RMSE reachable by any user partition
+  autoencoder_vae.py      Phase 2: variational autoencoder (step 4)
+  graph_tfidf.py          Phase 2: graph with a TF-IDF genre condition (step 1)
+  clustering_soft.py      Phase 2: GMM and fuzzy c-means memberships (step 5)
+  figures.py              Phase 2: publication figures (RMSE comparison, fuzzifier, K)
+scripts/                  command-line entry points
+  build_features_100k.py  the authors' feature script, updated for current libraries
+  verify_features.py      compares our features with the authors' files
+  run_phase1.py           main experiment (5-fold cross-validation)
+  leakage_simulator.py    tests whether evaluation mistakes explain the paper's result
+  optimize_phase1.py      hyperparameter search with Optuna
+  partition_bound.py      partition search used as a reference bound
+  run_phase2.py           Phase 2 extensions compared with the baseline and controls
+original/                 the authors' unmodified script and feature files
+datasets/ml-100k/         MovieLens 100K
+docs/                     paper, presentation, Phase 1 audit and Phase 2 results report
+figs/                     architecture diagram and the Phase 2 figures (written by run_phase2.py)
+outputs/                  generated results (not tracked by git)
 ```
 
 ## Setup
@@ -125,6 +130,9 @@ python -m scripts.run_phase1 --seeds 42 0 1 2 3
 # Phase 2: extensions, controls, cold start and sweeps
 python -m scripts.run_phase2 --k-sweep 2 4 8 16 32 --cos-sweep 0.9 0.95
 
+# rebuild the Phase 2 report and figures from the saved CSV files, without rerunning
+python -m scripts.run_phase2 --from-results
+
 # choose K with the elbow and silhouette methods
 python -m scripts.run_phase1 --select-k
 
@@ -134,8 +142,9 @@ python -m scripts.optimize_phase1 --space paper --trials 120 --workers 3
 python -m scripts.partition_bound --k 8 --effort full
 ```
 
-Results are written to `outputs/`. Feature matrices and autoencoder codes are cached in
-`outputs/cache/`, so later runs are much faster than the first one.
+Intermediate results are written to `outputs/`, which git ignores. The Phase 2 report and
+figures go to the tracked `docs/` and `figs/` directories. Feature matrices and autoencoder
+codes are cached in `outputs/cache/`, so later runs are much faster than the first one.
 
 ## Citation
 

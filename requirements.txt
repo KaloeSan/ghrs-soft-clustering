@@ -2,7 +2,7 @@
 #
 # TensorFlow has no wheels for Python 3.14, so the authors' Keras stack runs on
 # Keras 3 with the PyTorch backend (KERAS_BACKEND=torch, set in ghrs/__init__.py).
-# matplotlib, imported (but unused) by the original script, is dropped.
+# matplotlib draws the Phase 2 figures (ghrs/figures.py).
 
 numpy==2.5.4
 pandas==3.1.1
@@ -12,3 +12,4 @@ networkx==3.7
 keras==3.15.1
 torch==2.15.0           # the PyPI wheel on Windows is CPU-only, which is enough here
 optuna==5.0.0           # scripts/optimize_phase1.py (hyperparameter search)
+matplotlib==3.11.2      # ghrs/figures.py (Phase 2 figures)

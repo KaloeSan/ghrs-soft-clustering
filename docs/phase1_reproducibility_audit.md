@@ -18,12 +18,12 @@ otherwise. Scripts: `scripts/run_phase1.py`, `scripts/leakage_simulator.py`,
 
 ## 1. What the authors released vs. what we reconstructed
 
-| Step | Source | Status |
-|---|---|---|
-| 1–3 graph + side information (35 features) | authors' `Features100K.py` | ported; matches the authors' pickles to 1.7e-15 |
-| 4 autoencoder 35→16→4→16→35 | not released, rebuilt from Sec. 4.5 / Figs. 8–11 | Fig. 9 loss curves reproduced (log-RMS error 0.02–0.09) |
-| 5 K-Means K = 8 | not released | min-max scaled codes (Fig. 10 axes run exactly 0–1) |
-| 6–7 Algorithm 1 | not released | matches an independent plain-Python version bit for bit |
+|                                       Step | Source                                           | Status                                                  |
+| -----------------------------------------: | ------------------------------------------------ | ------------------------------------------------------- |
+| 1–3 graph + side information (35 features) | authors' `Features100K.py`                       | ported; matches the authors' pickles to 1.7e-15         |
+|                4 autoencoder 35→16→4→16→35 | not released, rebuilt from Sec. 4.5 / Figs. 8–11 | Fig. 9 loss curves reproduced (log-RMS error 0.02–0.09) |
+|                            5 K-Means K = 8 | not released                                     | min-max scaled codes (Fig. 10 axes run exactly 0–1)     |
+|                            6–7 Algorithm 1 | not released                                     | matches an independent plain-Python version bit for bit |
 
 Faithful strict result, 5 seeds × 5 folds: **RMSE 1.0761 ± 0.0014**, MAE 0.849,
 P 0.664, R 0.724. Baselines on the same folds: global mean 1.126, item mean 1.025.
@@ -48,16 +48,16 @@ None of these moves the result by more than 0.005 RMSE.
 
 ## 3. Can any configuration reach 0.887 under the strict protocol?
 
-| Evidence | 5-fold RMSE |
-|---|---|
-| 17 AE variants (activations, BatchNorm, L1/L2 0…1e-2, h = 8–32, lr, epochs, batch) | 1.070–1.079 |
-| Optuna, paper space (unspecified knobs + α grid + K ∈ [2, 30]), test-selected | 1.025 (collapsed code = item mean; see §5) |
-| Best *train-only* partition (leave-one-rating-out search), K = 8 | 1.001 |
-| Best partition found **with the test labels** (oracle, full search), K = 8 | **0.902** |
-| Oracle partition, quick search, K = 2 / 4 / 16 / 20 / 30 | 0.969 / 0.939 / 0.900 / 0.892 / 0.887 |
-| Same K for the real GHRS pipeline | 1.034 / 1.049 / 1.104 / 1.113 / 1.136 |
-| Beyond the paper: ALS user/item baseline + damped cluster residual (Optuna, extended space) | 0.943 |
-| Context: biased MF / user-kNN / Koren baseline | 0.935 / 0.951 / 0.946 |
+| Evidence                                                                                    |                                5-fold RMSE |
+| ------------------------------------------------------------------------------------------- | -----------------------------------------: |
+| 17 AE variants (activations, BatchNorm, L1/L2 0…1e-2, h = 8–32, lr, epochs, batch)          |                                1.070–1.079 |
+| Optuna, paper space (unspecified knobs + α grid + K ∈ [2, 30]), test-selected               | 1.025 (collapsed code = item mean; see §5) |
+| Best *train-only* partition (leave-one-rating-out search), K = 8                            |                                      1.001 |
+| Best partition found **with the test labels** (oracle, full search), K = 8                  |                                  **0.902** |
+| Oracle partition, quick search, K = 2 / 4 / 16 / 20 / 30                                    |      0.969 / 0.939 / 0.900 / 0.892 / 0.887 |
+| Same K for the real GHRS pipeline                                                           |      1.034 / 1.049 / 1.104 / 1.113 / 1.136 |
+| Beyond the paper: ALS user/item baseline + damped cluster residual (Optuna, extended space) |                                      0.943 |
+| Context: biased MF / user-kNN / Koren baseline                                              |                      0.935 / 0.951 / 0.946 |
 
 Steps 1–5 only choose the partition of the users. At the paper's K = 8, even a partition
 chosen with access to the test labels gives about 0.90. This is an upper bound on the true
@@ -68,20 +68,23 @@ factorisation by 0.05.
 
 ## 4. Leakage hypotheses (`scripts/leakage_simulator.py`)
 
-| Hypothesis (K = 8) | RMSE | S² | P@3.5 | R@3.5 | max P at R ≥ 0.799 |
-|---|---|---|---|---|---|
-| H0 strict | 1.075 | 2.9e-5 | 0.663 | 0.726 | 0.642 |
-| H1 graph from train+test | 1.067 | 4.7e-5 | 0.667 | 0.728 | 0.646 |
-| H1b authors' `ua.base` features reused for every fold | 1.063 | 2.8e-5 | 0.668 | 0.728 | 0.647 |
-| H2 AE/K-Means "on the whole dataset" | not a channel: all 943 users are in every training fold, and the AE sees only the 35 user features (≡ H1) | | | | |
-| H3 CI from train+test (target leak) | 0.942 | 6.1e-6 | 0.712 | 0.768 | 0.701 |
-| H4 in-sample evaluation | 0.935 | 7.7e-6 | 0.715 | 0.771 | 0.705 |
-| H8a steps 1–6 once on `ua.base`, scored on u1..u5.test | 0.960 | **1.7e-4** | 0.708 | 0.759 | 0.692 |
-| H9 ua/ub file swap | 0.946 | 7.5e-6 | 0.728 | 0.762 | 0.714 |
-| Metric variants (MAE, Eq. 6 literal, per-user RMSE, rounding) on H0 | 0.848 / −0.08 / 1.044 / 1.111 | | | | |
-| **Paper** | **0.887** | **1.6e-4** | **0.771** | **0.799** | |
+| Hypothesis (K = 8)                                     |      RMSE |         S² |     P@3.5 |     R@3.5 | max P at R ≥ 0.799 |
+| ------------------------------------------------------ | --------: | ---------: | --------: | --------: | -----------------: |
+| H0 strict                                              |     1.075 |     2.9e-5 |     0.663 |     0.726 |              0.642 |
+| H1 graph from train+test                               |     1.067 |     4.7e-5 |     0.667 |     0.728 |              0.646 |
+| H1b authors' `ua.base` features reused for every fold  |     1.063 |     2.8e-5 |     0.668 |     0.728 |              0.647 |
+| H3 CI from train+test (target leak)                    |     0.942 |     6.1e-6 |     0.712 |     0.768 |              0.701 |
+| H4 in-sample evaluation                                |     0.935 |     7.7e-6 |     0.715 |     0.771 |              0.705 |
+| H8a steps 1–6 once on `ua.base`, scored on u1..u5.test |     0.960 | **1.7e-4** |     0.708 |     0.759 |              0.692 |
+| H9 ua/ub file swap                                     |     0.946 |     7.5e-6 |     0.728 |     0.762 |              0.714 |
+| **Paper**                                              | **0.887** | **1.6e-4** | **0.771** | **0.799** |                    |
 
-- **Graph/AE leakage (the user's main hypothesis) is ruled out.** It moves RMSE by
+H2 (AE and K-Means fitted "on the whole dataset") is not a separate channel: all 943 users are
+in every training fold, and the AE sees only the 35 user features, so it reduces to H1.
+Metric variants computed on H0: MAE 0.848, Eq. 6 as printed −0.08, per-user RMSE 1.044,
+rounded predictions 1.111.
+
+- **Graph/AE leakage, the hypothesis that motivated this audit, is ruled out.** It moves RMSE by
   −0.008 to −0.012.
 - **Only target leakage reaches 0.887**, and only at a larger K: H3 at K ≈ 20–24
   (0.890 / 0.877), H4 at K ≈ 20, H9 at K ≈ 20, H8a at K ≈ 32–48.

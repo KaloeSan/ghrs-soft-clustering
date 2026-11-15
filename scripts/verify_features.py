@@ -1,7 +1,7 @@
 """Compare regenerated features with the authors' pickles in ``original/data100k``.
 
 Usage:
-    python -m scripts.verify_features          # check outputs/data100k (from scripts.Features100K)
+    python -m scripts.verify_features          # check outputs/data100k (from scripts.build_features_100k)
     python -m scripts.verify_features --fast   # check the vectorised implementation instead
 
 The exit code is 0 only if every alpha matches (same columns, same shape, |diff| <= atol).
@@ -14,6 +14,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from ghrs.paths import AUTHORS_FEATURES, OUTPUTS
 
 
 def compare(name: str, ref: pd.DataFrame, ours: pd.DataFrame, atol: float) -> bool:
@@ -29,8 +31,8 @@ def compare(name: str, ref: pd.DataFrame, ours: pd.DataFrame, atol: float) -> bo
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ref", type=Path, default=Path("original/data100k"))
-    ap.add_argument("--ours", type=Path, default=Path("outputs/data100k"))
+    ap.add_argument("--ref", type=Path, default=AUTHORS_FEATURES)
+    ap.add_argument("--ours", type=Path, default=OUTPUTS / "data100k")
     ap.add_argument("--fast", action="store_true", help="verify the vectorised feature path instead")
     ap.add_argument("--atol", type=float, default=1e-6)
     args = ap.parse_args()

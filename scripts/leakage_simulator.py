@@ -51,6 +51,8 @@ import numpy as np
 import pandas as pd
 
 from ghrs.experiment import FOLDS_5CV, PAPER_TARGETS, Experiment, GraphConfig, Protocol, RunConfig, summarize
+from ghrs.paths import OUTPUTS
+from ghrs.tables import markdown_table
 
 # Values read off the paper's figures.
 FIG7_PAPER = {0.005: 1.02, 0.01: 0.887, 0.015: 0.99, 0.02: 1.05, 0.025: 1.11,
@@ -165,16 +167,8 @@ def curve_fit(df: pd.DataFrame, x: str) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
-def md_table(df: pd.DataFrame) -> str:
-    """Format a data frame as a Markdown table (avoids the optional `tabulate` dependency)."""
-    cell = lambda v: f"{v:.4g}" if isinstance(v, float) and abs(v) < 1e-3 and v else (  # noqa: E731
-        f"{v:.4f}" if isinstance(v, float) else str(v))
-    rows = [list(df.columns), ["---"] * df.shape[1]] + [[cell(v) for v in r] for r in df.itertuples(index=False)]
-    return "\n".join("| " + " | ".join(map(str, r)) + " |" for r in rows)
-
-
 def write_report(out: Path, results: dict[str, pd.DataFrame], base: RunConfig) -> None:
-    fmt = md_table
+    fmt = markdown_table
     a, k0 = base.graph.alpha, base.cluster.k
     lines = ["# Leakage simulator report", "",
              f"Paper targets (Table 3): {PAPER_TARGETS}", ""]
@@ -209,7 +203,7 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, nargs="+", default=[42])
     ap.add_argument("--alpha", type=float, default=0.01)
     ap.add_argument("--k", type=int, default=8)
-    ap.add_argument("--out", type=Path, default=Path("outputs/leakage"))
+    ap.add_argument("--out", type=Path, default=OUTPUTS / "leakage")
     args = ap.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)

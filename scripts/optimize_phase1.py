@@ -57,6 +57,7 @@ import pandas as pd
 from ghrs.autoencoder import AEConfig
 from ghrs.experiment import (FOLDS_5CV, PAPER_TARGETS, ClusterConfig, Experiment, GraphConfig, Protocol,
                              RunConfig, summarize)
+from ghrs.paths import OUTPUTS
 from ghrs.recommender import RecConfig
 
 ALPHA_GRID = [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045]
@@ -68,8 +69,10 @@ def suggest(trial: optuna.Trial, space: str, protocol: Protocol) -> RunConfig:
         l1 = trial.suggest_float("l1", 1e-7, 1e-2, log=True)
         l2 = trial.suggest_float("l2", 1e-7, 1e-2, log=True)
     else:
-        l1 = trial.suggest_float("l1", 1e-7, 1e-2, log=True) if trial.suggest_categorical("use_l1", [True, False]) else 0.0
-        l2 = trial.suggest_float("l2", 1e-7, 1e-2, log=True) if trial.suggest_categorical("use_l2", [True, False]) else 0.0
+        use_l1 = trial.suggest_categorical("use_l1", [True, False])
+        l1 = trial.suggest_float("l1", 1e-7, 1e-2, log=True) if use_l1 else 0.0
+        use_l2 = trial.suggest_categorical("use_l2", [True, False])
+        l2 = trial.suggest_float("l2", 1e-7, 1e-2, log=True) if use_l2 else 0.0
     ae = AEConfig(
         hidden_dim=trial.suggest_categorical("hidden_dim", [4, 6, 8, 12, 16, 24, 32]),
         l1=l1, l2=l2,
@@ -219,7 +222,7 @@ def main() -> None:
     proto = Protocol(graph_source=args.graph_source, ci_source=args.ci_source, eval_on=args.eval_on)
     tag = "strict" if proto.is_strict else f"g-{args.graph_source}_ci-{args.ci_source}_ev-{args.eval_on}"
     args.study = args.study or f"{args.space}_{args.objective}_{tag}"
-    out = Path("outputs/hpo") / args.study
+    out = OUTPUTS / "hpo" / args.study
     out.mkdir(parents=True, exist_ok=True)
     args.journal = out / "journal.log"
 

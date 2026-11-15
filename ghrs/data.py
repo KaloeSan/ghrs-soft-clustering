@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "datasets" / "ml-100k"
+from .paths import DATA_DIR
 
 N_ITEMS_100K = 1682  # hard-coded as `i_no` in the authors' script
 GENRE_COLS = [f"g{i}" for i in range(19)]

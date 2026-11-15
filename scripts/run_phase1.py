@@ -24,6 +24,7 @@ from ghrs.autoencoder import AEConfig
 from ghrs.clustering import elbow_and_silhouette, scale_codes
 from ghrs.experiment import FOLDS_5CV, PAPER_TARGETS, ClusterConfig, Experiment, GraphConfig, RunConfig, summarize
 from ghrs.metrics import rmse
+from ghrs.paths import OUTPUTS
 
 
 def parse_args():
@@ -41,7 +42,7 @@ def parse_args():
     ap.add_argument("--l2", type=float, default=d.l2)
     ap.add_argument("--scale", default="minmax", choices=["minmax", "none", "standard"])
     ap.add_argument("--select-k", action="store_true", help="only run elbow/silhouette on the first fold")
-    ap.add_argument("--out", type=Path, default=Path("outputs/results"))
+    ap.add_argument("--out", type=Path, default=OUTPUTS / "results")
     return ap.parse_args()
 
 

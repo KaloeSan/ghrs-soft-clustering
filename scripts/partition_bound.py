@@ -36,13 +36,14 @@ from sklearn.cluster import KMeans
 from ghrs.bounds import FoldStats, PartitionSearch
 from ghrs.experiment import FOLDS_5CV, PAPER_TARGETS, ClusterConfig, Experiment, RunConfig
 from ghrs.metrics import rmse
+from ghrs.paths import OUTPUTS
 from ghrs.recommender import ClusterRatingModel, membership_matrix
 
 
 def search(fs: FoldStats, inits: dict, K: int, objective: str, effort: str, chains: int, sa_sweeps: int,
            ils: int, seed: int) -> tuple[np.ndarray, dict]:
     rng = np.random.default_rng(seed)
-    score = (lambda L: fs.rmse(L)) if objective == "test" else (lambda L: PartitionSearch(fs, L, K, "loro").F.sum())
+    score = fs.rmse if objective == "test" else (lambda L: PartitionSearch(fs, L, K, "loro").F.sum())
     best_L, best, log = None, np.inf, {}
     for name, L0 in inits.items():
         s = PartitionSearch(fs, L0, K, objective)
@@ -84,7 +85,7 @@ def main() -> None:
     ap.add_argument("--sa-sweeps", type=int, default=200)
     ap.add_argument("--ils", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out", type=Path, default=Path("outputs/bounds"))
+    ap.add_argument("--out", type=Path, default=OUTPUTS / "bounds")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 

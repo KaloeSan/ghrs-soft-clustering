@@ -104,14 +104,14 @@ class PartitionSearch:
 
     def _deltas(self, u):
         a, su = self.L[u], self._user(u)
-        fa_minus = self.f(*[c[a] - s for c, s in zip(self.cl, su)])
-        fb_plus = self.f(*[c + s for c, s in zip(self.cl, su)])
+        fa_minus = self.f(*[c[a] - s for c, s in zip(self.cl, su, strict=True)])
+        fb_plus = self.f(*[c + s for c, s in zip(self.cl, su, strict=True)])
         delta = (fa_minus - self.F[a]) + (fb_plus - self.F)
         delta[a] = 0.0
         return a, su, fa_minus, fb_plus, delta
 
     def _move(self, u, a, b, su, fa_minus, fb_plus):
-        for c, s in zip(self.cl, su):
+        for c, s in zip(self.cl, su, strict=True):
             c[a] -= s
             c[b] += s
         self.F[a], self.F[b] = fa_minus, fb_plus[b]

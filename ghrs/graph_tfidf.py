@@ -26,8 +26,7 @@ import scipy.sparse as sp
 from sklearn.feature_extraction.text import TfidfTransformer
 
 from .data import GENRE_COLS, N_ITEMS_100K
-from .features import (add_graph_features, build_side_info, co_rating_matrices, graph_from_pairs,
-                       similar_pairs)
+from .features import add_graph_features, build_side_info, co_rating_matrices, graph_from_pairs, similar_pairs
 
 
 def genre_tfidf_profiles(df_ratings: pd.DataFrame, item_genres: pd.DataFrame, n_users: int) -> np.ndarray:
