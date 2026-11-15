@@ -28,6 +28,9 @@ outputs/
 *.synctex.gz
 *.fdb_latexmk
 *.fls
+*.nav
+*.snm
+*.vrb
 
 # IDE / OS
 .vscode/

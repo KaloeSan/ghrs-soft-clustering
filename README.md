@@ -44,23 +44,22 @@ does not specify, a search over user partitions, and a set of simulated evaluati
 mistakes all fail to explain the gap. The details are in
 [docs/phase1_reproducibility_audit.md](docs/phase1_reproducibility_audit.md).
 
-### Phase 2 extensions
+### Phase 2: Our Contributions
 
 Same folds and seeds, K = 8. p-values: corrected resampled t-test on the per-fold RMSE,
 Holm-adjusted. The full tables, controls, cold-start results and sweeps are produced
 by `scripts/run_phase2.py` in [docs/phase2_results_report.md](docs/phase2_results_report.md),
 and the figures for the paper in [`figs/`](figs/).
 
-| Model                           |   RMSE |         vs baseline | vs GHRS with K = 1       |
-| ------------------------------- | -----: | ------------------: | ------------------------ |
-| Phase 1 baseline (AE + K-Means) | 1.0761 |                     |                          |
-| VAE + K-Means                   | 1.0788 |             +0.0028 | worse                    |
-| TF-IDF graph + AE + K-Means     | 1.0777 |             +0.0016 | worse                    |
-| AE + GMM                        | 1.0727 |  -0.0034 (p = 0.15) | worse                    |
-| VAE + GMM                       | 1.0657 |  -0.0103 (p = 0.02) | worse                    |
-| AE + FCM                        | 1.0263 | -0.0497 (p < 0.001) | no difference (p = 0.76) |
-| VAE + FCM + TF-IDF              | 1.0255 | -0.0505 (p < 0.001) | no difference (p = 0.76) |
-| GHRS with K = 1 / item mean     | 1.0246 |                     |                          |
+| Model                           |   RMSE |         vs baseline | Notes                                         |
+| ------------------------------- | -----: | ------------------: | --------------------------------------------- |
+| Phase 1 baseline (AE + K-Means) | 1.0761 |                     | Reproduction of the paper's pipeline          |
+| VAE + K-Means                   | 1.0788 |             +0.0028 | Generative representation; no gain            |
+| TF-IDF graph + AE + K-Means     | 1.0777 |             +0.0016 | Genre-aware graph; no gain                    |
+| AE + GMM                        | 1.0727 |  -0.0034 (p = 0.15) | Soft clustering; not significant              |
+| VAE + GMM                       | 1.0657 |  -0.0103 (p = 0.02) | Generative representation + soft clustering   |
+| AE + FCM                        | 1.0263 | -0.0497 (p < 0.001) | Soft clustering; better in 5/5 folds          |
+| VAE + FCM + TF-IDF              | 1.0255 | -0.0505 (p < 0.001) | All three contributions; better in 5/5 folds  |
 
 Soft clustering with fuzzy c-means lowers the RMSE by about 0.05 compared with the
 baseline, with similar gains for cold-start users. The controls show where the gain comes

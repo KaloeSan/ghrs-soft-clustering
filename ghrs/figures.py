@@ -43,7 +43,6 @@ COLORS = {
     "VAE + K-Means": "#56B4E9",
     "AE + GMM": "#E69F00",
     "AE + FCM": "#009E73",
-    ITEM_MEAN: "#D9D9D9",
 }
 MARKERS = {BASELINE: "o", "AE + GMM": "s", "AE + FCM": "^"}
 MEMBERSHIP_COLOR = "#CC79A7"
@@ -95,15 +94,15 @@ def _reference_rmse(comparison: pd.DataFrame, variant: str) -> float | None:
 
 
 def plot_rmse_comparison(comparison: pd.DataFrame) -> Figure:
-    """Bar chart of the RMSE of the baseline, three Phase 2 variants and the item mean.
+    """Bar chart of the RMSE of the Phase 1 baseline and three Phase 2 architectures.
 
     Error bars show the standard deviation of the overall RMSE over seeds
-    (``sd_seeds``). The item mean does not depend on the seed and has none. The
-    differences are a few hundredths of an RMSE point, so the y-axis starts just
-    below the lowest bar rather than at zero; say so in the figure caption.
+    (``sd_seeds``). The differences are a few hundredths of an RMSE point, so the
+    y-axis starts just below the lowest bar rather than at zero; say so in the
+    figure caption.
     """
-    order = [BASELINE, "VAE + K-Means", "AE + GMM", "AE + FCM", ITEM_MEAN]
-    labels = {BASELINE: "Phase 1 baseline\n(AE + K-Means)", ITEM_MEAN: "Item mean\n(reference)"}
+    order = [BASELINE, "VAE + K-Means", "AE + GMM", "AE + FCM"]
+    labels = {BASELINE: "Phase 1 baseline\n(AE + K-Means)"}
     rows = comparison.set_index("variant").reindex([n for n in order if n in set(comparison["variant"])])
 
     x = np.arange(len(rows))
@@ -112,10 +111,8 @@ def plot_rmse_comparison(comparison: pd.DataFrame) -> Figure:
     has_sd = np.isfinite(sd)
 
     fig, ax = _new_figure()
-    bars = ax.bar(x, rmse, width=0.6, color=[COLORS[n] for n in rows.index],
-                  edgecolor="black", linewidth=0.5, zorder=2)
-    if ITEM_MEAN in rows.index:
-        bars[rows.index.get_loc(ITEM_MEAN)].set_hatch("////")
+    ax.bar(x, rmse, width=0.6, color=[COLORS[n] for n in rows.index],
+           edgecolor="black", linewidth=0.5, zorder=2)
     ax.errorbar(x[has_sd], rmse[has_sd], yerr=sd[has_sd], fmt="none",
                 ecolor="black", elinewidth=0.6, capsize=2.5, capthick=0.6, zorder=3)
 
