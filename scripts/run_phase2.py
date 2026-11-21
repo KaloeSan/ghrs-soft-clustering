@@ -53,13 +53,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from ghrs.experiment import FOLDS_5CV, ClusterConfig, Experiment, Protocol, RunConfig, summarize
 from ghrs.data import load_ratings
 from ghrs.figures import FIGS_DIR, make_figures
 from ghrs.metrics import all_metrics
 from ghrs.paths import DOCS, OUTPUTS, ROOT
+from ghrs.stats import corrected_ttest, holm
 from ghrs.tables import markdown_table
 
 BASELINE = "Phase 1 baseline (AE + K-Means)"
@@ -112,26 +112,6 @@ def reference_runs(ex: Experiment, folds, seed: int, protocol: Protocol | None =
     items = pd.DataFrame([item_mean_run(ex, f, protocol) for f in folds]).assign(variant=ITEM_MEAN)
     one = ex.run(RunConfig(cluster=ClusterConfig(k=1), protocol=protocol), folds, (seed,)).assign(variant=K1)
     return pd.concat([items, one], ignore_index=True)
-
-
-def corrected_ttest(d: np.ndarray, test_train_ratio: float) -> float:
-    """Two-sided corrected resampled t-test (Nadeau & Bengio 2003) on per-fold differences."""
-    k = len(d)
-    var = float(np.var(d, ddof=1)) if k > 1 else 0.0
-    if var == 0.0:
-        return float("nan")
-    t = float(np.mean(d)) / np.sqrt((1.0 / k + test_train_ratio) * var)
-    return float(2 * stats.t.sf(abs(t), k - 1))
-
-
-def holm(pvalues: dict[str, float]) -> dict[str, float]:
-    """Holm step-down adjustment; NaN p-values are left out of the family."""
-    valid = sorted((p, n) for n, p in pvalues.items() if not np.isnan(p))
-    adjusted, running = {n: float("nan") for n in pvalues}, 0.0
-    for i, (p, n) in enumerate(valid):
-        running = max(running, min(1.0, (len(valid) - i) * p))
-        adjusted[n] = running
-    return adjusted
 
 
 def test_table(runs: pd.DataFrame, groups: dict[str, str], ratio: float) -> pd.DataFrame:

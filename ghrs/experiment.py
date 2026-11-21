@@ -12,14 +12,14 @@ autoencoder (``ClusterConfig.space='vae'``) and soft clustering
 (``ClusterConfig.method='gmm'`` or ``'fcm'``). With the defaults the pipeline is
 exactly the Phase 1 model.
 
-Feature matrices and autoencoder codes are cached as .npy files in ``outputs/cache``,
-so repeated runs only recompute what has changed.
+Feature matrices, autoencoder codes and SVD++ predictions are cached as .npy files in
+``outputs/cache``, so repeated runs only recompute what has changed.
 """
 
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +30,7 @@ from .autoencoder_vae import VAEConfig, encode_users_vae
 from .clustering import N_INIT, kmeans_clusters, scale_codes
 from .clustering_soft import SOFT_METHODS, membership_stats, soft_memberships
 from .data import load_item_genres, load_ratings, load_users
+from .factorization import SVDppConfig, fit_svdpp, item_features, out_of_fold_predictions, standardize
 from .features import build_feature_matrix_fast, co_rating_matrices
 from .graph_tfidf import build_feature_matrix_hybrid
 from .metrics import all_metrics
@@ -38,6 +39,10 @@ from .recommender import ClusterRatingModel, RecConfig, membership_matrix
 
 PAPER_TARGETS = {"rmse": 0.887, "rmse_S2": 1.595e-4, "precision": 0.771, "recall": 0.799}
 FOLDS_5CV = ("u1", "u2", "u3", "u4", "u5")
+# temporal_user: the last 20% of every user's ratings (by time) are the test set.
+# temporal_global: the latest 20% of all ratings; in ML-100K most of these come from
+# users without earlier ratings, so this split mainly measures cold start.
+TEMPORAL_FOLDS = ("temporal_user", "temporal_global")
 
 
 @dataclass(frozen=True)
@@ -114,9 +119,29 @@ class RunConfig:
     cluster: ClusterConfig = field(default_factory=ClusterConfig)
     rec: RecConfig = field(default_factory=RecConfig)
     protocol: Protocol = field(default_factory=Protocol)
+    svdpp: SVDppConfig = field(default_factory=SVDppConfig)   # used only with baseline='offset'
 
     def flat(self) -> dict:
         return {f"{part}.{k}": v for part, d in asdict(self).items() for k, v in d.items()}
+
+
+def temporal_split(name: str, test_fraction: float = 0.2) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split all 100K ratings by time: per user ('temporal_user') or globally ('temporal_global')."""
+    ratings = load_ratings("u.data").sort_values("time", kind="stable").reset_index(drop=True)
+    if name == "temporal_global":
+        cut = int((1 - test_fraction) * len(ratings))
+        train, test = ratings.iloc[:cut], ratings.iloc[cut:]
+    elif name == "temporal_user":
+        by_user = ratings.groupby("UID")
+        rank = by_user.cumcount() / by_user["UID"].transform("size")
+        train, test = ratings[rank < 1 - test_fraction], ratings[rank >= 1 - test_fraction]
+    else:
+        raise ValueError(f"unknown temporal split {name!r}")
+    return train.reset_index(drop=True), test.reset_index(drop=True)
+
+
+def _frame_hash(df: pd.DataFrame, cols: tuple[str, ...]) -> str:
+    return hashlib.sha1(np.ascontiguousarray(df[list(cols)].to_numpy())).hexdigest()
 
 
 def _key(*parts) -> str:
@@ -141,10 +166,13 @@ class Experiment:
         self._folds: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
 
     def fold(self, name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Return (train, test) for 'u1', or for an explicit pair such as 'ua.base:ub.test'."""
+        """Return (train, test) for 'u1', a temporal split, or a pair such as 'ua.base:ub.test'."""
         if name not in self._folds:
-            base, test = name.split(":") if ":" in name else (f"{name}.base", f"{name}.test")
-            self._folds[name] = (load_ratings(base), load_ratings(test))
+            if name in TEMPORAL_FOLDS:
+                self._folds[name] = temporal_split(name)
+            else:
+                base, test = name.split(":") if ":" in name else (f"{name}.base", f"{name}.test")
+                self._folds[name] = (load_ratings(base), load_ratings(test))
         return self._folds[name]
 
     def cold_users(self, p: Protocol) -> np.ndarray:
@@ -229,7 +257,38 @@ class Experiment:
         UC[self.uids] = W
         return UC
 
-    def run_fold(self, fold: str, cfg: RunConfig, seed: int = 42, labels: np.ndarray | None = None) -> dict:
+    def svdpp_offsets(self, fold: str, cfg: RunConfig) -> tuple[np.ndarray, np.ndarray]:
+        """SVD++ predictions for the cluster-model ratings (out-of-fold) and for the evaluated ratings.
+
+        Both are averaged over ``cfg.svdpp.seeds``. SVD++ always uses the original GHRS
+        user features, so every cluster variant is compared on the same baseline.
+        """
+        p = cfg.protocol
+        _, ci, ev = self.rating_sources(fold, p)
+        F_t = self.features(fold, replace(cfg.graph, cos_threshold=None, edge_seed=None), p)
+        key = _key("svdpp-v1", fold, asdict(cfg.svdpp), hashlib.sha1(np.ascontiguousarray(F_t)).hexdigest(),
+                   _frame_hash(ci, ("UID", "MID", "rate", "time")), _frame_hash(ev, ("UID", "MID", "time")))
+        path = self.cache / "svdpp" / f"{key}.npz"
+        if path.exists():
+            with np.load(path) as z:
+                return z["train"], z["eval"]
+        U = np.zeros((int(self.uids.max()) + 1, F_t.shape[1]), np.float32)
+        U[self.uids] = standardize(F_t)
+        G = item_features(self.genres, int(max(self.genres.index.max(), ci["MID"].max(), ev["MID"].max())) + 1)
+        train_pred, eval_pred = [], []
+        for s in cfg.svdpp.seeds:
+            eval_pred.append(fit_svdpp(ci, U, G, cfg.svdpp, s).predict(ev))
+            train_pred.append(out_of_fold_predictions(ci, U, G, cfg.svdpp, s))
+        out = np.mean(train_pred, axis=0), np.mean(eval_pred, axis=0)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.stem}.{os.getpid()}.tmp.npz")
+        np.savez(tmp, train=out[0], eval=out[1])
+        os.replace(tmp, path)
+        return out
+
+    def predict_fold(self, fold: str, cfg: RunConfig, seed: int = 42, labels: np.ndarray | None = None
+                     ) -> tuple[pd.DataFrame, np.ndarray, dict]:
+        """Predictions for the evaluated ratings of one fold, plus run information."""
         p = cfg.protocol
         _, ci_ratings, ev = self.rating_sources(fold, p)
         info: dict = {}
@@ -244,13 +303,20 @@ class Experiment:
             UC = self.memberships(X, cfg.cluster, seed)
         else:
             UC = membership_matrix(self.uids, labels, cfg.cluster.k)
-        model = ClusterRatingModel(cfg.rec).fit(ci_ratings, UC, self.genres)
-        pred, tiers = model.predict(ev)
+        train_offset = eval_offset = None
+        if cfg.rec.baseline == "offset":
+            train_offset, eval_offset = self.svdpp_offsets(fold, cfg)
+        model = ClusterRatingModel(cfg.rec).fit(ci_ratings, UC, self.genres, offset=train_offset)
+        pred, tiers = model.predict(ev, offset=eval_offset)
+        extra = {**membership_stats(UC[self.uids]),
+                 **{f"ae_{k}": v for k, v in info.items()},
+                 **{f"tier_{k}": int(v) for k, v in tiers.items()}}
+        return ev, pred, extra
+
+    def run_fold(self, fold: str, cfg: RunConfig, seed: int = 42, labels: np.ndarray | None = None) -> dict:
+        ev, pred, extra = self.predict_fold(fold, cfg, seed, labels)
         return {"fold": fold, "seed": seed, "n_eval": len(ev),
-                **all_metrics(ev["UID"].to_numpy(), ev["rate"].to_numpy(), pred),
-                **membership_stats(UC[self.uids]),
-                **{f"ae_{k}": v for k, v in info.items()},
-                **{f"tier_{k}": int(v) for k, v in tiers.items()}}
+                **all_metrics(ev["UID"].to_numpy(), ev["rate"].to_numpy(), pred), **extra}
 
     def run(self, cfg: RunConfig, folds=FOLDS_5CV, seeds=(42,)) -> pd.DataFrame:
         return pd.DataFrame([self.run_fold(f, cfg, s) for s in seeds for f in folds])

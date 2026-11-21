@@ -70,6 +70,23 @@ rather than from a better user partition. The VAE and the TF-IDF graph condition
 change the RMSE on their own; the TF-IDF graph scores the same as a graph with the same
 number of randomly kept edges.
 
+### Phase 3: Synthesis with SVD++
+
+R. Jarzyński's parallel reproduction showed that the largest gain comes from user and
+item biases and from factorisation. We added his SVD++ model with the GHRS features as
+side information, a per-user temporal split and a label-permutation leakage audit, and
+ran our soft clustering on top of SVD++ as a residual correction.
+
+| Model                               | 5-fold RMSE | Temporal (per user) | Notes                                   |
+| ----------------------------------- | ----------: | ------------------: | --------------------------------------- |
+| GHRS reproduction (AE + K-Means)    |      1.0761 |              1.1339 | Phase 1                                 |
+| SVD++ with GHRS features            |      0.9080 |              0.9547 | 0.168 better than GHRS, 5/5 folds       |
+| SVD++ + FCM residual                |      0.9075 |              0.9535 | -0.0006 vs SVD++, 5/5 folds (p = 0.04)  |
+| SVD++ + VAE + FCM + TF-IDF residual |      0.9073 |              0.9534 | -0.0007 vs SVD++, 5/5 folds (p = 0.06)  |
+
+Details: [docs/final_synthesis_report.md](docs/final_synthesis_report.md) and
+[docs/phase3_synthesis_results.md](docs/phase3_synthesis_results.md).
+
 ## Repository structure
 
 ```
@@ -88,6 +105,8 @@ ghrs/                     the method as a Python package
   graph_tfidf.py          Phase 2: graph with a TF-IDF genre condition (step 1)
   clustering_soft.py      Phase 2: GMM and fuzzy c-means memberships (step 5)
   figures.py              Phase 2: publication figures (RMSE comparison, fuzzifier, K)
+  factorization.py        Phase 3: SVD++ with GHRS side information
+  stats.py                corrected resampled t-test and Holm adjustment
 scripts/                  command-line entry points
   build_features_100k.py  the authors' feature script, updated for current libraries
   verify_features.py      compares our features with the authors' files
@@ -96,9 +115,10 @@ scripts/                  command-line entry points
   optimize_phase1.py      hyperparameter search with Optuna
   partition_bound.py      partition search used as a reference bound
   run_phase2.py           Phase 2 extensions compared with the baseline and controls
+  run_final_synthesis.py  Phase 3: clustering on top of SVD++, temporal splits, leakage audit
 original/                 the authors' unmodified script and feature files
 datasets/ml-100k/         MovieLens 100K
-docs/                     paper, presentation, Phase 1 audit and Phase 2 results report
+docs/                     paper, presentations, Phase 1 audit, Phase 2 and 3 results, synthesis report
 figs/                     architecture diagram and the Phase 2 figures (written by run_phase2.py)
 outputs/                  generated results (not tracked by git)
 ```
@@ -131,6 +151,9 @@ python -m scripts.run_phase2 --k-sweep 2 4 8 16 32 --cos-sweep 0.9 0.95
 
 # rebuild the Phase 2 report and figures from the saved CSV files, without rerunning
 python -m scripts.run_phase2 --from-results
+
+# Phase 3: SVD++ synthesis on random folds and temporal splits, with the leakage audit
+python -m scripts.run_final_synthesis --temporal-global
 
 # choose K with the elbow and silhouette methods
 python -m scripts.run_phase1 --select-k

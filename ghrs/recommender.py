@@ -27,8 +27,11 @@ that we only use in the hyperparameter search:
 
 - ``similar``: identical genre vector (default), genre Jaccard similarity, top-k
   item cosine similarity, or no similar-items level at all.
-- ``baseline``: none (paper), item bias, user bias, or user and item biases fitted
-  by alternating least squares (as in Surprise's BaselineOnly).
+- ``baseline``: none (paper), item bias, user bias, user and item biases fitted
+  by alternating least squares (as in Surprise's BaselineOnly), or ``offset``: an
+  external prediction such as SVD++ (``ghrs.factorization``), passed to ``fit`` and
+  ``predict``. For ``offset`` the training values must come from models that did not
+  see the rating (out-of-fold), otherwise the residuals are too small.
 - ``shrink``: pulls every cluster-item mean towards its prior P_i.
 - ``fallback``: the cluster mean (paper) or the prior P_i.
 - ``clip``: clip the predictions to [1, 5].
@@ -51,7 +54,7 @@ import pandas as pd
 from .data import GENRE_COLS
 
 SIMILAR = ("genre_exact", "genre_jaccard", "item_cosine", "none")
-BASELINES = ("none", "item", "user", "user_item")
+BASELINES = ("none", "item", "user", "user_item", "offset")
 FALLBACKS = ("cluster", "baseline")
 
 
@@ -101,7 +104,9 @@ class ClusterRatingModel:
             self.mu = 0.0
             return
         self.prior = np.zeros(nI)
-        if cfg.baseline == "item":
+        if cfg.baseline == "offset":  # the baseline values are passed in from outside
+            self.mu = 0.0
+        elif cfg.baseline == "item":
             self.b_i = np.bincount(i, r - self.mu, nI) / (cfg.reg_i + n_i)
         elif cfg.baseline == "user":
             self.b_u = np.bincount(u, r - self.mu, nU) / (cfg.reg_u + n_u)
@@ -144,12 +149,21 @@ class ClusterRatingModel:
         np.fill_diagonal(W, 0)
         return W
 
+    def _offset(self, offset: np.ndarray | None, n: int) -> np.ndarray:
+        if (self.cfg.baseline == "offset") != (offset is not None):
+            raise ValueError("an offset is needed exactly when baseline='offset'")
+        if offset is not None and len(offset) != n:
+            raise ValueError(f"offset has {len(offset)} values for {n} ratings")
+        return np.asarray(offset, float) if offset is not None else None
+
     def fit(self, train: pd.DataFrame, UC: np.ndarray, item_genres: pd.DataFrame,
-            n_items: int | None = None) -> "ClusterRatingModel":
+            n_items: int | None = None, offset: np.ndarray | None = None) -> "ClusterRatingModel":
         """Fit CI from the training ratings.
 
         ``UC`` has one row per UID (row 0 is unused) and one column per cluster.
+        ``offset`` is the external baseline for every training rating (baseline='offset').
         """
+        offset = self._offset(offset, len(train))
         u, i, r = (train[c].to_numpy() for c in ("UID", "MID", "rate"))
         r = r.astype(float)
         self.UC = np.asarray(UC, float)
@@ -161,7 +175,7 @@ class ClusterRatingModel:
         self.n_users = self.UC.shape[0]
         self.n_items = int(max(n_items or 0, item_genres.index.max(), i.max())) + 1
         self._fit_baseline(u, i, r)
-        e = r - self.baseline(u, i)
+        e = r - (offset if offset is not None else self.baseline(u, i))
 
         K, lam = self.UC.shape[1], self.cfg.shrink
         w = self.UC[u]                                        # cluster weights of each rating
@@ -201,10 +215,12 @@ class ClusterRatingModel:
         self.tier = tier
         return self
 
-    def predict(self, test: pd.DataFrame) -> tuple[np.ndarray, pd.Series]:
+    def predict(self, test: pd.DataFrame, offset: np.ndarray | None = None) -> tuple[np.ndarray, pd.Series]:
         """Predict the test ratings; also return how many came from each level."""
+        offset = self._offset(offset, len(test))
         u, i = test["UID"].to_numpy(), test["MID"].to_numpy()
-        pred = self.baseline(u, i) + np.einsum("nk,kn->n", self.UC[u], self.CI[:, i])
+        base = offset if offset is not None else self.baseline(u, i)
+        pred = base + np.einsum("nk,kn->n", self.UC[u], self.CI[:, i])
         if self.cfg.clip:
             pred = np.clip(pred, 1.0, 5.0)
         hard = self.UC[u].argmax(1)

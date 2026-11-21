@@ -23,6 +23,13 @@ def load_users(data_dir: Path = DATA_DIR) -> pd.DataFrame:
     return pd.read_csv(data_dir / "u.user", sep="|", names=["UID", "age", "gender", "job", "zip"])
 
 
+def load_release_years(data_dir: Path = DATA_DIR) -> pd.Series:
+    """Release year of every movie, indexed by MID; missing dates get the median year."""
+    items = pd.read_csv(data_dir / "u.item", sep="|", header=None, encoding="latin-1")
+    years = pd.to_datetime(items[2], format="%d-%b-%Y", errors="coerce").dt.year
+    return pd.Series(years.fillna(years.median()).to_numpy(), index=items[0].to_numpy(), name="year")
+
+
 def load_item_genres(data_dir: Path = DATA_DIR) -> pd.DataFrame:
     """The 19 binary genre flags of every movie, indexed by MID."""
     cols = ["MID", "title", "release", "video_release", "url", *GENRE_COLS]
