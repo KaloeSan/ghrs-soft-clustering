@@ -85,7 +85,9 @@ ran our soft clustering on top of SVD++ as a residual correction.
 | SVD++ + VAE + FCM + TF-IDF residual |      0.9073 |              0.9534 | -0.0007 vs SVD++, 5/5 folds (p = 0.06)  |
 
 Details: [docs/final_synthesis_report.md](docs/final_synthesis_report.md) and
-[docs/phase3_synthesis_results.md](docs/phase3_synthesis_results.md).
+[docs/phase3_synthesis_results.md](docs/phase3_synthesis_results.md). The synthesis
+script also draws the main comparison `figs/fig1_rmse_comparison` and
+`figs/fig4_temporal_robustness` for the defence slides (labelled in Polish).
 
 ## Repository structure
 
@@ -104,7 +106,7 @@ ghrs/                     the method as a Python package
   autoencoder_vae.py      Phase 2: variational autoencoder (step 4)
   graph_tfidf.py          Phase 2: graph with a TF-IDF genre condition (step 1)
   clustering_soft.py      Phase 2: GMM and fuzzy c-means memberships (step 5)
-  figures.py              Phase 2: publication figures (RMSE comparison, fuzzifier, K)
+  figures.py              figures: dataset overview, Phase 2 (RMSE, fuzzifier, K), Phase 3 (synthesis, temporal split)
   factorization.py        Phase 3: SVD++ with GHRS side information
   stats.py                corrected resampled t-test and Holm adjustment
 scripts/                  command-line entry points
@@ -119,7 +121,7 @@ scripts/                  command-line entry points
 original/                 the authors' unmodified script and feature files
 datasets/ml-100k/         MovieLens 100K
 docs/                     paper, presentations, Phase 1 audit, Phase 2 and 3 results, synthesis report
-figs/                     architecture diagram and the Phase 2 figures (written by run_phase2.py)
+figs/                     architecture diagram and the figures written by run_phase2.py and run_final_synthesis.py
 outputs/                  generated results (not tracked by git)
 ```
 
@@ -155,6 +157,9 @@ python -m scripts.run_phase2 --from-results
 # Phase 3: SVD++ synthesis on random folds and temporal splits, with the leakage audit
 python -m scripts.run_final_synthesis --temporal-global
 
+# redraw all figures (0-5) from the dataset and the saved CSV files, without rerunning anything
+python -m ghrs.figures
+
 # choose K with the elbow and silhouette methods
 python -m scripts.run_phase1 --select-k
 
@@ -164,8 +169,8 @@ python -m scripts.optimize_phase1 --space paper --trials 120 --workers 3
 python -m scripts.partition_bound --k 8 --effort full
 ```
 
-Intermediate results are written to `outputs/`, which git ignores. The Phase 2 report and
-figures go to the tracked `docs/` and `figs/` directories. Feature matrices and autoencoder
+Intermediate results are written to `outputs/`, which git ignores. The Phase 2 and Phase 3
+reports and figures go to the tracked `docs/` and `figs/` directories. Feature matrices and autoencoder
 codes are cached in `outputs/cache/`, so later runs are much faster than the first one.
 
 ## Citation

@@ -420,7 +420,8 @@ def main() -> None:
     print(f"Saved: {args.report}")
 
     figures = make_figures(args.figs_dir, acc, results.get("fuzziness_sweep"), results.get("k_sweep"),
-                           tuple(args.fig_formats))
+                           tuple(args.fig_formats), k=settings.get("k", args.k),
+                           default_m=settings.get("fuzziness", args.fuzziness))
     for path in figures:
         print(f"Saved: {path}")
 

@@ -157,8 +157,8 @@ Paired tests on the random folds (corrected t-test, Holm):
   stack by 0.0007 (5/5 folds, p = 0.06), while the hard K-Means residual is 0.0006
   worse (1/5 folds better). The temporal split shows the same order (−0.0012 for FCM).
 
-The label-permutation audit changes the strict predictions by at most 6.4e-6, below
-the run-to-run noise of 9.8e-6, and the leaky H3 protocol by up to 4.1 rating points.
+The label-permutation audit changes the strict predictions by at most 7.2e-6, below
+the run-to-run noise of 1.1e-5, and the leaky H3 protocol by up to 4.1 rating points.
 
 ## 7. What can be claimed
 
