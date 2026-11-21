@@ -14,9 +14,9 @@ files of earlier runs, without rerunning any experiment:
 
     python -m ghrs.figures
 
-Figures 2 and 3 are labelled in English for the paper. Figures 0, 1 and 4 are drawn
-for the Polish defence slides, so their labels are in Polish and numbers use a decimal
-comma. The Phase 1 reproduction is called "Baseline (AE + K-Means)" in every figure,
+Figures 0, 1, 2 and 4 are drawn for the Polish defence slides, so their labels are in
+Polish and numbers use a decimal comma; :func:`plot_fuzziness` also has an English
+version (``lang="en"``). Figure 3 is not on the slides and keeps English labels. The Phase 1 reproduction is called "Baseline (AE + K-Means)" in every figure,
 and bars carry only their RMSE value.
 
 Sizes and fonts follow the Springer LNCS format: every figure fits the 12.2 cm text
@@ -139,8 +139,16 @@ def _reference_rmse(comparison: pd.DataFrame, variant: str) -> float | None:
     return float(rows.iloc[0]) if len(rows) else None
 
 
+FUZZINESS_TEXT = {
+    "en": {"item_mean": "Item mean (reference)", "membership": "Mean max. membership",
+           "x": "Fuzzifier $m$", "uniform": "uniform", "default": "main experiments"},
+    "pl": {"item_mean": "Średnia ocen filmu (odniesienie)", "membership": "Średnia maks. przynależność",
+           "x": "Współczynnik rozmycia $m$", "uniform": "wagi równe", "default": "główne eksperymenty"},
+}
+
+
 def plot_fuzziness(fuzziness: pd.DataFrame, comparison: pd.DataFrame, k: int = 8,
-                   default_m: float = 2.0) -> Figure:
+                   default_m: float = 2.0, lang: str = "pl") -> Figure:
     """AE + FCM against the fuzzifier m: RMSE on the left axis, max membership on the right.
 
     As m grows the memberships flatten (the mean largest weight falls towards 1/K),
@@ -149,34 +157,37 @@ def plot_fuzziness(fuzziness: pd.DataFrame, comparison: pd.DataFrame, k: int = 8
     (m -> 1) and the item mean the fully smoothed end. A dashed vertical line marks the
     fuzzifier of the main experiments (``default_m``) and a dotted line on the right
     axis the uniform membership 1/K, the floor of the max-membership curve.
+
+    ``lang`` is "pl" (the defence slides; decimal comma) or "en" (the paper).
     """
+    text = FUZZINESS_TEXT[lang]
+    num = (lambda v, d=3: _pl(v, d).rstrip("0").rstrip(",")) if lang == "pl" else (lambda v, d=3: f"{v:g}")
     fz = fuzziness.sort_values("m")
     m = fz["m"].to_numpy()
 
     fig, ax = _new_figure()
     handles = ax.plot(m, fz["rmse"], marker="^", color=COLORS["AE + FCM"], label="RMSE (AE + FCM)")
-    for variant, style, label in ((BASELINE, ":", BASELINE_LABEL),
-                                  (ITEM_MEAN, "--", "Item mean (reference)")):
+    for variant, style, label in ((BASELINE, ":", BASELINE_LABEL), (ITEM_MEAN, "--", text["item_mean"])):
         value = _reference_rmse(comparison, variant)
         if value is not None:
             handles.append(ax.axhline(value, color=REFERENCE_COLOR, linestyle=style, linewidth=0.9, label=label))
-    ax.set_xlabel("Fuzzifier $m$")
+    ax.set_xlabel(text["x"])
     ax.set_ylabel("RMSE", color=COLORS["AE + FCM"])
     ax.tick_params(axis="y", colors=COLORS["AE + FCM"])
     ax.xaxis.set_major_locator(FixedLocator(m))
-    ax.set_xticklabels([f"{v:g}" for v in m])
+    ax.set_xticklabels([num(v) for v in m])
 
     right = ax.twinx()
     handles += right.plot(m, fz["max_membership"], marker="s", linestyle="--", color=MEMBERSHIP_COLOR,
-                          label="Mean max. membership")
+                          label=text["membership"])
     right.set_ylim(0, 1.1)
-    right.set_ylabel("Mean max. membership", color=MEMBERSHIP_COLOR)
+    right.set_ylabel(text["membership"], color=MEMBERSHIP_COLOR)
     right.tick_params(axis="y", colors=MEMBERSHIP_COLOR)
     right.spines["right"].set_visible(True)
     right.grid(False)
     uniform = 1.0 / k
     right.axhline(uniform, color=MEMBERSHIP_COLOR, linestyle=":", linewidth=0.8, alpha=0.8)
-    right.annotate(f"uniform: $1/K = {uniform:g}$", (m[-1], uniform), xytext=(-2, 2),
+    right.annotate(f"{text['uniform']}: $1/K$ = {num(uniform)}", (m[-1], uniform), xytext=(-2, 2),
                    textcoords="offset points", ha="right", va="bottom", fontsize=6.5, color=MEMBERSHIP_COLOR)
 
     # Headroom above the highest reference line, and the legend outside the axes: both
@@ -185,9 +196,12 @@ def plot_fuzziness(fuzziness: pd.DataFrame, comparison: pd.DataFrame, k: int = 8
     ax.set_ylim(low, high + 0.08 * (high - low))
     if m.min() <= default_m <= m.max():
         ax.axvline(default_m, color=REFERENCE_COLOR, linestyle="--", linewidth=0.7, alpha=0.7, zorder=1)
-        ax.annotate(f"main experiments: $m = {default_m:g}$", (default_m, 1.0), xycoords=("data", "axes fraction"),
-                    xytext=(3, -3), textcoords="offset points", ha="left", va="top", fontsize=6.5,
-                    color=REFERENCE_COLOR)
+        ax.annotate(f"{text['default']}: $m$ = {num(default_m)}", (default_m, 1.0),
+                    xycoords=("data", "axes fraction"), xytext=(3, -3), textcoords="offset points",
+                    ha="left", va="top", fontsize=6.5, color=REFERENCE_COLOR)
+    if lang == "pl":
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: _pl(v, 2)))
+        right.yaxis.set_major_formatter(FuncFormatter(lambda v, _: _pl(v, 1)))
     fig.legend(handles=handles, loc="outside upper center", ncols=2)
     return fig
 
